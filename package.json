@@ -11,7 +11,8 @@
     "migrate:projects": "node scripts/migrate-projects.js",
     "migrate:services": "node scripts/migrate-services.js",
     "migrate:all": "node scripts/migrate-blogs.js && node scripts/migrate-projects.js && node scripts/migrate-services.js",
-    "add:services": "node scripts/add-services.js"
+    "add:services": "node scripts/add-services.js",
+    "check:db": "node scripts/check-mongodb-connection.js"
   },
   "keywords": ["express", "mongodb", "api"],
   "author": "Sayed Safi",
