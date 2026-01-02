@@ -12,6 +12,11 @@ import projectRoutes from './routes/projects.js';
 import serviceRoutes from './routes/services.js';
 import uploadRoutes from './routes/upload.js';
 
+// Import analytics routes
+import trackRoutes from './routes/track.js';
+import leadsRoutes from './routes/leads.js';
+import analyticsRoutes from './routes/analytics.js';
+
 // Load environment variables
 dotenv.config();
 
@@ -61,6 +66,22 @@ app.use('/api/blog', blogRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/track', trackRoutes);
+app.use('/api/leads', leadsRoutes);
+app.use('/api/analytics', analyticsRoutes);
+
+// Log registered routes (development only)
+if (process.env.NODE_ENV === 'development') {
+  console.log('✅ Routes registered:');
+  console.log('  - /api/auth');
+  console.log('  - /api/blog');
+  console.log('  - /api/projects');
+  console.log('  - /api/services');
+  console.log('  - /api/upload');
+  console.log('  - /api/track');
+  console.log('  - /api/leads');
+  console.log('  - /api/analytics');
+}
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -68,6 +89,28 @@ app.get('/api/health', (req, res) => {
     status: 'OK', 
     message: 'Server is running',
     timestamp: new Date().toISOString()
+  });
+});
+
+// Route listing endpoint (for debugging)
+app.get('/api/routes', (req, res) => {
+  res.json({
+    success: true,
+    routes: {
+      auth: '/api/auth',
+      blog: '/api/blog',
+      projects: '/api/projects',
+      services: '/api/services',
+      upload: '/api/upload',
+      track: '/api/track',
+      leads: '/api/leads',
+      analytics: '/api/analytics'
+    },
+    testEndpoints: {
+      track: '/api/track/test',
+      leads: '/api/leads/test',
+      analytics: '/api/analytics/test'
+    }
   });
 });
 
@@ -109,5 +152,9 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`✅ All routes registered successfully`);
+  console.log(`📊 Analytics endpoints: /api/analytics/*`);
+  console.log(`📋 Leads endpoints: /api/leads/*`);
+  console.log(`📈 Tracking endpoints: /api/track/*`);
 });
 
