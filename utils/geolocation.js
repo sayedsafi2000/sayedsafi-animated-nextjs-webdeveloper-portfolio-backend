@@ -12,7 +12,16 @@
 export async function getCountryFromIP(ip) {
   try {
     // Skip localhost/private IPs
-    if (!ip || ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+    if (!ip || 
+        ip === '::1' || 
+        ip === '127.0.0.1' || 
+        ip === 'unknown' ||
+        ip.startsWith('192.168.') || 
+        ip.startsWith('10.') || 
+        ip.startsWith('172.') ||
+        ip.startsWith('::ffff:192.168.') ||
+        ip.startsWith('::ffff:10.') ||
+        ip.startsWith('::ffff:172.')) {
       return {
         country: 'Unknown',
         countryCode: 'XX',
@@ -21,25 +30,86 @@ export async function getCountryFromIP(ip) {
       };
     }
 
-    // Use ipapi.co free API (no key required for basic usage)
-    // Alternative: ip-api.com (free tier available)
-    const response = await fetch(`https://ipapi.co/${ip}/json/`, {
-      headers: {
-        'User-Agent': 'Portfolio-Analytics/1.0'
-      }
-    });
+    // Clean IPv6-mapped IPv4 addresses
+    const cleanIP = ip.replace(/^::ffff:/, '');
 
-    if (!response.ok) {
-      throw new Error('Geolocation API error');
+    // Try ip-api.com first (more reliable, free tier: 45 requests/minute)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response1 = await fetch(`http://ip-api.com/json/${cleanIP}?fields=status,message,country,countryCode,city,regionName`, {
+        headers: {
+          'User-Agent': 'Portfolio-Analytics/1.0'
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response1.ok) {
+        const data1 = await response1.json();
+        
+        // Check if API returned valid data
+        if (data1.status === 'success' && data1.country && data1.countryCode) {
+          return {
+            country: data1.country || 'Unknown',
+            countryCode: (data1.countryCode || 'XX').toUpperCase(),
+            city: data1.city || 'Unknown',
+            region: data1.regionName || 'Unknown'
+          };
+        }
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.log('ip-api.com failed, trying fallback...', error.message);
+      }
     }
 
-    const data = await response.json();
+    // Fallback to ipapi.co
+    try {
+      const controller2 = new AbortController();
+      const timeoutId2 = setTimeout(() => controller2.abort(), 5000);
+      
+      const response2 = await fetch(`https://ipapi.co/${cleanIP}/json/`, {
+        headers: {
+          'User-Agent': 'Portfolio-Analytics/1.0'
+        },
+        signal: controller2.signal
+      });
 
+      clearTimeout(timeoutId2);
+
+      if (response2.ok) {
+        const data2 = await response2.json();
+        
+        // Check for error responses from ipapi.co
+        if (data2.error) {
+          throw new Error(data2.reason || 'API error');
+        }
+
+        // Validate that we got actual country data
+        if (data2.country_name && data2.country_code && data2.country_code !== 'XX') {
+          return {
+            country: data2.country_name || 'Unknown',
+            countryCode: (data2.country_code || 'XX').toUpperCase(),
+            city: data2.city || 'Unknown',
+            region: data2.region || 'Unknown'
+          };
+        }
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.log('ipapi.co also failed', error.message);
+      }
+    }
+
+    // If both APIs fail, return Unknown
     return {
-      country: data.country_name || 'Unknown',
-      countryCode: data.country_code || 'XX',
-      city: data.city || 'Unknown',
-      region: data.region || 'Unknown'
+      country: 'Unknown',
+      countryCode: 'XX',
+      city: 'Unknown',
+      region: 'Unknown'
     };
   } catch (error) {
     console.error('Geolocation error:', error);

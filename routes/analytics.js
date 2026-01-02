@@ -162,9 +162,23 @@ router.get('/countries', async (req, res) => {
       }
     }
 
-    // Aggregate by country
+    // Aggregate by country - filter out invalid data
     const countries = await Visit.aggregate([
-      { $match: { ...dateFilter, country: { $ne: 'Unknown' } } },
+      { 
+        $match: { 
+          ...dateFilter, 
+          country: { 
+            $nin: ['Unknown', 'unknown', '', null],
+            $exists: true,
+            $ne: null
+          },
+          countryCode: {
+            $nin: ['XX', 'xx', '', null],
+            $exists: true,
+            $ne: null
+          }
+        } 
+      },
       {
         $group: {
           _id: '$country',
@@ -182,13 +196,33 @@ router.get('/countries', async (req, res) => {
           uniqueVisitors: { $size: '$uniqueVisitors' }
         }
       },
+      {
+        $match: {
+          country: { $nin: ['Unknown', 'unknown', '', null] },
+          countryCode: { $nin: ['XX', 'xx', '', null] }
+        }
+      },
       { $sort: { visits: -1 } },
       { $limit: parseInt(limit) }
     ]);
 
+    // Clean and normalize country data
+    const cleanedCountries = countries
+      .filter(c => 
+        c.country && 
+        c.country !== 'Unknown' && 
+        c.countryCode && 
+        c.countryCode !== 'XX' &&
+        c.countryCode !== 'xx'
+      )
+      .map(c => ({
+        ...c,
+        countryCode: (c.countryCode || 'XX').toUpperCase()
+      }));
+
     res.json({
       success: true,
-      data: { countries }
+      data: { countries: cleanedCountries }
     });
   } catch (error) {
     console.error('Countries analytics error:', error);

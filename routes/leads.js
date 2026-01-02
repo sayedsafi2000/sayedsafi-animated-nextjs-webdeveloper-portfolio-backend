@@ -2,6 +2,7 @@ import express from 'express';
 import Lead from '../models/Lead.js';
 import { getIPFromRequest, getCountryFromIP } from '../utils/geolocation.js';
 import { protect, authorize } from '../middleware/auth.js';
+import { sendLeadNotificationEmail, sendThankYouEmail } from '../utils/email.js';
 
 const router = express.Router();
 
@@ -40,6 +41,26 @@ router.post('/create', async (req, res) => {
       country: geo.country,
       countryCode: geo.countryCode,
       status: 'new'
+    });
+
+    // Send emails asynchronously (don't block the response)
+    Promise.all([
+      sendLeadNotificationEmail({
+        name: lead.name,
+        email: lead.email,
+        message: lead.message,
+        country: lead.country,
+        page: lead.page,
+        createdAt: lead.createdAt
+      }),
+      sendThankYouEmail({
+        name: lead.name,
+        email: lead.email,
+        message: lead.message
+      })
+    ]).catch(error => {
+      // Log errors but don't fail the request
+      console.error('Error sending emails:', error);
     });
 
     res.status(201).json({
