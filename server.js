@@ -25,10 +25,13 @@ app.use(cors({
   origin: [
     process.env.FRONTEND_URL || 'http://localhost:3000',
     process.env.ADMIN_DASHBOARD_URL || 'http://localhost:3001',
-    'http://localhost:3000', // Explicitly allow localhost
-    'http://127.0.0.1:3000', // Allow 127.0.0.1
+    'http://localhost:3000', // Explicitly allow localhost frontend
+    'http://localhost:3001', // Explicitly allow localhost admin dashboard
+    'http://127.0.0.1:3000', // Allow 127.0.0.1 frontend
+    'http://127.0.0.1:3001', // Allow 127.0.0.1 admin dashboard
     'https://sayedsafi.me', // Your production frontend
     'https://www.sayedsafi.me', // If you have www version
+    'https://admin.sayedsafi.me', // Your production admin dashboard
     'https://sayedsafi-animated-nextjs-webdevelo-gamma.vercel.app', // Vercel frontend deployment
     /^https:\/\/.*\.vercel\.app$/, // Allow all Vercel preview deployments
   ],
