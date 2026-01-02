@@ -26,10 +26,15 @@ app.use(cors({
     process.env.FRONTEND_URL || 'http://localhost:3000',
     process.env.ADMIN_DASHBOARD_URL || 'http://localhost:3001',
     'http://localhost:3000', // Explicitly allow localhost
+    'http://127.0.0.1:3000', // Allow 127.0.0.1
     'https://sayedsafi.me', // Your production frontend
-    'https://www.sayedsafi.me' // If you have www version
+    'https://www.sayedsafi.me', // If you have www version
+    'https://sayedsafi-animated-nextjs-webdevelo-gamma.vercel.app', // Vercel frontend deployment
+    /^https:\/\/.*\.vercel\.app$/, // Allow all Vercel preview deployments
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -38,10 +43,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/sayed-safi-portfolio', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/sayed-safi-portfolio')
 .then(() => {
   console.log('✅ MongoDB connected successfully');
 })
