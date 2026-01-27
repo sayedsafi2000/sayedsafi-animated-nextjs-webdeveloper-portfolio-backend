@@ -80,6 +80,19 @@ const blogSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // Public engagement (kept lightweight for performance)
+  commentsCount: {
+    type: Number,
+    default: 0
+  },
+  ratingsCount: {
+    type: Number,
+    default: 0
+  },
+  ratingsTotal: {
+    type: Number,
+    default: 0
+  },
   createdAt: {
     type: Date,
     default: Date.now
