@@ -3,6 +3,7 @@ import { body, validationResult, query } from 'express-validator';
 import Blog from '../models/Blog.js';
 import Comment from '../models/Comment.js';
 import { protect, authorize } from '../middleware/auth.js';
+import { calculateReadingTime, generateTableOfContents, validateContentSEO } from '../utils/blogUtils.js';
 
 const router = express.Router();
 
@@ -20,26 +21,43 @@ function getClientIp(req) {
 router.get('/', [
   query('published').optional().isBoolean(),
   query('category').optional().trim(),
+  query('search').optional().trim(),
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('page').optional().isInt({ min: 1 })
 ], async (req, res) => {
   try {
-    const { published, category, limit = 10, page = 1 } = req.query;
+    const { published, category, search, limit = 10, page = 1 } = req.query;
     
     // Build query
     const query = {};
     // Only filter by published if explicitly provided as 'true' or 'false'
     // If published parameter is not provided, show all (for admin dashboard)
     if (published !== undefined && published !== '' && (published === 'true' || published === 'false')) {
+      // Use published field for filtering (backward compatible with existing posts)
+      // Status field is synced by pre-save hook but we filter by published for compatibility
       query.published = published === 'true';
     }
     // If no published parameter or invalid value, don't filter (show all blogs)
     if (category) {
       query.category = category;
     }
+    
+    // Search functionality - search in title, excerpt, and tags
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { excerpt: { $regex: search, $options: 'i' } },
+        { tags: { $in: [new RegExp(search, 'i')] } }
+      ];
+    }
 
     // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Debug logging (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Blog query:', JSON.stringify(query, null, 2));
+    }
 
     // Get posts
     const posts = await Blog.find(query)
@@ -50,6 +68,11 @@ router.get('/', [
 
     // Get total count
     const total = await Blog.countDocuments(query);
+    
+    // Debug logging (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Found ${posts.length} posts (total: ${total})`);
+    }
 
     res.json({
       success: true,
@@ -335,9 +358,48 @@ router.post('/', protect, authorize('admin'), [
       tags = tags.map(tag => typeof tag === 'string' ? tag.trim() : tag).filter(tag => tag);
     }
 
+    // Auto-calculate reading time if not provided or content changed
+    let readTime = req.body.readTime;
+    if (req.body.content && (!readTime || readTime === '5 min read')) {
+      readTime = calculateReadingTime(req.body.content);
+    }
+
+    // Auto-generate table of contents
+    const tableOfContents = req.body.content ? generateTableOfContents(req.body.content) : [];
+
+    // Handle status and publishedAt
+    let status = req.body.status || (req.body.published ? 'published' : 'draft');
+    let publishedAt = req.body.publishedAt;
+    
+    if (status === 'published' && !publishedAt) {
+      publishedAt = new Date();
+    }
+    
+    if (status === 'scheduled' && req.body.scheduledAt) {
+      publishedAt = new Date(req.body.scheduledAt);
+    }
+
+    // Process robots object if provided
+    let robots = { index: true, follow: true };
+    if (req.body.robots) {
+      if (typeof req.body.robots === 'object') {
+        robots = {
+          index: req.body.robots.index !== undefined ? req.body.robots.index : true,
+          follow: req.body.robots.follow !== undefined ? req.body.robots.follow : true
+        };
+      }
+    }
+
     const postData = {
       ...req.body,
-      tags
+      tags,
+      readTime,
+      tableOfContents,
+      status,
+      publishedAt,
+      robots,
+      // Sync published field with status
+      published: status === 'published'
     };
 
     const post = await Blog.create(postData);
@@ -400,6 +462,7 @@ router.put('/:id', protect, authorize('admin'), [
       }
     }
 
+    // Initialize update data
     const updateData = {
       ...req.body,
       updatedAt: Date.now()
@@ -407,6 +470,43 @@ router.put('/:id', protect, authorize('admin'), [
     
     if (tags !== undefined) {
       updateData.tags = tags;
+    }
+
+    // Auto-calculate reading time if content changed
+    if (req.body.content) {
+      updateData.readTime = calculateReadingTime(req.body.content);
+      updateData.tableOfContents = generateTableOfContents(req.body.content);
+    }
+
+    // Handle status and publishedAt
+    if (req.body.status !== undefined) {
+      updateData.status = req.body.status;
+      updateData.published = req.body.status === 'published';
+      
+      if (req.body.status === 'published' && !updateData.publishedAt) {
+        updateData.publishedAt = new Date();
+      }
+      
+      if (req.body.status === 'scheduled' && req.body.scheduledAt) {
+        updateData.publishedAt = new Date(req.body.scheduledAt);
+      }
+    } else if (req.body.published !== undefined) {
+      // Legacy support: if published boolean is provided, sync status
+      updateData.status = req.body.published ? 'published' : 'draft';
+      updateData.published = req.body.published;
+      if (req.body.published && !updateData.publishedAt) {
+        updateData.publishedAt = new Date();
+      }
+    }
+
+    // Process robots object if provided
+    if (req.body.robots) {
+      if (typeof req.body.robots === 'object') {
+        updateData.robots = {
+          index: req.body.robots.index !== undefined ? req.body.robots.index : true,
+          follow: req.body.robots.follow !== undefined ? req.body.robots.follow : true
+        };
+      }
     }
 
     const post = await Blog.findByIdAndUpdate(
@@ -456,6 +556,81 @@ router.delete('/:id', protect, authorize('admin'), async (req, res) => {
     });
   } catch (error) {
     console.error('Delete blog error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   POST /api/blog/validate-seo
+// @desc    Validate content for SEO best practices
+// @access  Private (Admin only)
+router.post('/validate-seo', protect, authorize('admin'), [
+  body('content').notEmpty().withMessage('Content is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        errors: errors.array()
+      });
+    }
+
+    const validation = validateContentSEO(req.body.content);
+    
+    res.json({
+      success: true,
+      data: validation
+    });
+  } catch (error) {
+    console.error('SEO validation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   GET /api/blog/categories
+// @desc    Get all unique categories with counts (public)
+// @access  Public
+router.get('/categories', async (req, res) => {
+  try {
+    const categories = await Blog.distinct('category', { published: true });
+    
+    // Get count for each category
+    const categoriesWithCounts = await Promise.all(
+      categories.map(async (category) => {
+        const count = await Blog.countDocuments({ 
+          category, 
+          published: true 
+        });
+        return {
+          name: category,
+          count
+        };
+      })
+    );
+    
+    // Sort by count (descending) then by name
+    categoriesWithCounts.sort((a, b) => {
+      if (b.count !== a.count) {
+        return b.count - a.count;
+      }
+      return a.name.localeCompare(b.name);
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        categories: categoriesWithCounts.map(c => c.name),
+        categoriesWithCounts
+      }
+    });
+  } catch (error) {
+    console.error('Get categories error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
