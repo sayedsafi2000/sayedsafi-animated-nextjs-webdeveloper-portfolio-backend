@@ -16,6 +16,7 @@ import uploadRoutes from './routes/upload.js';
 import trackRoutes from './routes/track.js';
 import leadsRoutes from './routes/leads.js';
 import analyticsRoutes from './routes/analytics.js';
+import adsRoutes from './routes/ads.js';
 
 // Load environment variables
 dotenv.config();
@@ -69,6 +70,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/track', trackRoutes);
 app.use('/api/leads', leadsRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/ads', adsRoutes);
 
 // Log registered routes (development only)
 if (process.env.NODE_ENV === 'development') {
@@ -81,6 +83,7 @@ if (process.env.NODE_ENV === 'development') {
   console.log('  - /api/track');
   console.log('  - /api/leads');
   console.log('  - /api/analytics');
+  console.log('  - /api/ads');
 }
 
 // Health check endpoint
@@ -104,7 +107,8 @@ app.get('/api/routes', (req, res) => {
       upload: '/api/upload',
       track: '/api/track',
       leads: '/api/leads',
-      analytics: '/api/analytics'
+      analytics: '/api/analytics',
+      ads: '/api/ads'
     },
     testEndpoints: {
       track: '/api/track/test',
