@@ -33,11 +33,12 @@ const blogSchema = new mongoose.Schema({
   excerpt: {
     type: String,
     required: [true, 'Excerpt is required'],
-    maxlength: [500, 'Excerpt cannot exceed 500 characters']
+    maxlength: [10000, 'Excerpt cannot exceed 10000 characters']
   },
   content: {
     type: String,
-    required: [true, 'Content is required']
+    required: [true, 'Content is required'],
+    maxlength: [10000, 'Content cannot exceed 10000 characters']
   },
   date: {
     type: Date,
