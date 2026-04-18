@@ -10,7 +10,7 @@ const projectSchema = new mongoose.Schema({
   description: {
     type: String,
     required: [true, 'Description is required'],
-    maxlength: [1000, 'Description cannot exceed 1000 characters']
+    maxlength: [5000, 'Description cannot exceed 5000 characters']
   },
   category: {
     type: String,

@@ -132,9 +132,14 @@ router.post('/', protect, authorize('admin'), [
     });
   } catch (error) {
     console.error('Create project error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error',
+      error: error.message,
+      details: error.name
     });
   }
 });
